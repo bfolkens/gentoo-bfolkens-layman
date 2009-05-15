@@ -1,0 +1,6 @@
+<layman>
+<overlay type="git" src="git://github.com/bfolkens/gentoo-bfolkens-layman.git" name="bfolkens-layman" contact="bfolkens@gmail.com">
+<link>http://github.com/bfolkens/gentoo-bfolkens-layman/tree/master</link>
+<description>An overlay of custom ebuilds I use all the time.</description>
+</overlay>
+</layman>
