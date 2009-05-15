@@ -1,0 +1,16 @@
+<IfDefine PHP5>
+	# Load the module first
+	<IfModule !mod_php5.c>
+		LoadModule php5_module    modules/libphp5.so
+	</IfModule>
+
+	# Set it to handle the files
+	<IfModule mod_mime.c>
+		AddType application/x-httpd-php5 .php
+		AddType application/x-httpd-php5 .phtml
+		AddType application/x-httpd-php5 .php5
+		AddType application/x-httpd-php5-source .phps
+	</IfModule>
+
+	DirectoryIndex index.php index.phtml
+</IfDefine>
