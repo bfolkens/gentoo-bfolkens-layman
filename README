@@ -1,0 +1,4 @@
+To add this overlay to layman:
+
+layman -f -o http://github.com/bfolkens/gentoo-bfolkens-layman/raw/master/bfolkens-layman.list -a bfolkens-layman
+
