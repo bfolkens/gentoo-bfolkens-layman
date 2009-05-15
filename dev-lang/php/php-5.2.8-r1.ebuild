@@ -282,7 +282,7 @@ src_compile_fastbuild() {
 		
 		# php-fpm patch support
 		if use fpm ; then
-			my_conf="${my_conf} --enable-fpm --with-fpm-conf=/etc/php/cgi-php5/php-fpm.conf"
+			my_conf="${my_conf} --enable-fpm --with-fpm-conf=/etc/php/cgi-php5/php-fpm.conf --with-fpm-log=/var/log/php-fpm.log --with-fpm-pid=/var/run/php-fpm.pid"
 		fi
 		
 		phpconfutils_extension_enable "discard-path" "discard-path" 0
@@ -407,7 +407,7 @@ src_compile_normal() {
 				
 				# php-fpm patch support
 				if use fpm ; then
-					my_conf="${my_conf} --enable-fpm --with-fpm-conf=/etc/php/cgi-php5/php-fpm.conf"
+					my_conf="${my_conf} --enable-fpm --with-fpm-conf=/etc/php/cgi-php5/php-fpm.conf --with-fpm-log=/var/log/php-fpm.log --with-fpm-pid=/var/run/php-fpm.pid"
 				fi
 				
 				phpconfutils_extension_enable "discard-path" "discard-path" 0
@@ -457,10 +457,13 @@ src_install() {
 				
 				# php-fpm patch support
 				if use fpm ; then
-					einfo "Installing php-fpm config and initscript"
-					cp "${FILESDIR}/php-fpm.conf" "${D}/etc/php/cgi-php5/php-fpm.conf"
-					cp "${FILESDIR}/php-fpm.init" "${T}/php-fpm"
-					doinitd "${T}/php-fpm"
+					einfo "Installing php-fpm config"
+					FPMSRCDIR="${WORKDIR}/${P}/sapi/cgi/fpm"
+					insinto	${PHP_INI_DIR}
+					doins "${FPMSRCDIR}/php-fpm.conf"
+					newins "${FPMSRCDIR}/php-fpm.conf" "php-fpm.conf.dist"
+					einfo "Installing php-fpm initscript"
+					newinitd "${FILESDIR}/php-fpm.init" "php-fpm"
 				fi
 				
 				;;
