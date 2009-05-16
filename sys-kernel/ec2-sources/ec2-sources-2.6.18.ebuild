@@ -17,5 +17,8 @@ src_unpack() {
     unpack ${A}
     cd ${S}/${PKG}
     make prep-kernels
+
+		epatch "${FILESDIR}"/${P}-fix_sumversion_limits_bug.patch
+
     cp -rL ./linux-2.6.18-xen ../linux-2.6.18-ec2
 }
