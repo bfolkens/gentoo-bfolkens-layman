@@ -1,0 +1,513 @@
+diff -uNr dahdi-linux-2.1.0.4.ORIG/drivers/dahdi/wctc4xxp/base.c dahdi-linux-2.1.0.4/drivers/dahdi/wctc4xxp/base.c
+--- dahdi-linux-2.1.0.4.ORIG/drivers/dahdi/wctc4xxp/base.c	2009-03-10 15:41:57.000000000 +0000
++++ dahdi-linux-2.1.0.4/drivers/dahdi/wctc4xxp/base.c	2009-03-10 15:43:04.000000000 +0000
+@@ -73,6 +73,7 @@
+ 	}                                                                   \
+ 
+ #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,18)
++#ifndef WARN_ON_ONCE
+ #define WARN_ON_ONCE(__condition) do {         \
+ 	static int __once = 1;                 \
+ 	if (unlikely(__condition)) {           \
+@@ -83,6 +84,7 @@
+ 	}                                      \
+ } while(0) 
+ #endif
++#endif
+ 
+ #define INVALID 999 /* Used to mark invalid channels, commands, etc.. */
+ #define MAX_CHANNEL_PACKETS  5 /* Never let more than 5 outstanding packets exist for any channel. */
+@@ -265,6 +267,7 @@
+ /* Supervisor function codes */
+ #define SUPVSR_CREATE_CHANNEL  0x0010
+ 
++#define MONITOR_LIVE_INDICATION_TYPE 0x75
+ #define CONFIG_CHANGE_TYPE        0x00 
+ #define CONFIG_DEVICE_CLASS       0x06
+ 
+@@ -456,10 +459,12 @@
+ 	unsigned long flags;
+ 
+ 	spinlock_t cmd_list_lock;
++	spinlock_t rx_list_lock;
+ 	/* This is a device-global list of commands that are waiting to be
+ 	 * transmited (and did not fit on the transmit descriptor ring) */
+ 	struct list_head cmd_list;
+ 	struct list_head waiting_for_response_list;
++	struct list_head rx_list;
+ 
+ 	unsigned int seq_num;
+ 	unsigned char numchannels;
+@@ -498,6 +503,25 @@
+ 
+ };
+ 
++#ifdef HAVE_NETDEV_PRIV
++struct wcdte_netdev_priv {
++	struct wcdte *wc;
++};
++#endif
++
++static inline struct wcdte *
++wcdte_from_netdev(struct net_device *netdev)
++{
++#ifdef HAVE_NETDEV_PRIV
++	struct wcdte_netdev_priv *priv;
++	priv = netdev_priv(netdev);
++	return priv->wc;
++#else
++	return netdev->priv;
++#endif
++}
++
++
+ static inline void wctc4xxp_set_ready(struct wcdte *wc) {
+ 	set_bit(DTE_READY, &wc->flags);
+ }
+@@ -563,7 +587,6 @@
+ 	return pt;
+ }
+ 
+-
+ static struct sk_buff * 
+ tcb_to_skb(struct net_device *netdev, const struct tcb *cmd)
+ {
+@@ -613,7 +636,7 @@
+ static void 
+ wctc4xxp_net_set_multi(struct net_device *netdev)
+ {
+-	struct wcdte *wc = netdev->priv;
++	struct wcdte *wc = wcdte_from_netdev(netdev);
+ 	DTE_DEBUG(DTE_DEBUG_GENERAL, "%s promiscuity:%d\n", 
+ 	   __FUNCTION__, netdev->promiscuity);
+ }
+@@ -621,7 +644,7 @@
+ static int 
+ wctc4xxp_net_up(struct net_device *netdev)
+ {
+-	struct wcdte *wc = netdev->priv;
++	struct wcdte *wc = wcdte_from_netdev(netdev);
+ 	DTE_DEBUG(DTE_DEBUG_GENERAL, "%s\n", __FUNCTION__);
+ #if 1
+ #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24)
+@@ -636,7 +659,7 @@
+ static int 
+ wctc4xxp_net_down(struct net_device *netdev)
+ {
+-	struct wcdte *wc = netdev->priv;
++	struct wcdte *wc = wcdte_from_netdev(netdev);
+ 	DTE_DEBUG(DTE_DEBUG_GENERAL, "%s\n", __FUNCTION__);
+ #if 1
+ #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24)
+@@ -653,7 +676,7 @@
+ static int 
+ wctc4xxp_net_hard_start_xmit(struct sk_buff *skb, struct net_device *netdev)
+ {
+-	struct wcdte *wc = netdev->priv;
++	struct wcdte *wc = wcdte_from_netdev(netdev);
+ 	struct tcb *cmd;
+ 
+ 	/* We set DO_NOT_CAPTURE because this packet was already captured by
+@@ -688,7 +711,7 @@
+ static int 
+ wctc4xxp_poll(struct net_device *netdev, int *budget)
+ {
+-	struct wcdte *wc = netdev->priv;
++	struct wcdte *wc = wcdte_from_netdev(netdev);
+ 	int count = 0;
+ 	int quota = min(netdev->quota, *budget);
+ 
+@@ -714,7 +737,11 @@
+ 	count = wctc4xxp_net_receive(wc, budget);
+ 
+ 	if (!skb_queue_len(&wc->captured_packets)) {
++#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 29)
+ 		netif_rx_complete(wc->netdev, &wc->napi);
++#else
++		netif_rx_complete(&wc->napi);
++#endif
+ 	}
+ 	return count;
+ }
+@@ -723,7 +750,7 @@
+ static struct net_device_stats *
+ wctc4xxp_net_get_stats(struct net_device *netdev)
+ {
+-	struct wcdte *wc = netdev->priv;
++	struct wcdte *wc = wcdte_from_netdev(netdev);
+ 	return &wc->net_stats;
+ }
+ 
+@@ -760,7 +787,7 @@
+ static int 
+ wctc4xxp_net_ioctl(struct net_device *netdev, struct ifreq *ifr, int cmd)
+ {
+-	struct wcdte *wc = netdev->priv;
++	struct wcdte *wc = wcdte_from_netdev(netdev);
+ 	switch(cmd) {
+ 	case 0x89f0:
+ 		down(&wc->chansem);
+@@ -789,14 +816,25 @@
+ {
+ 	int res;
+ 	struct net_device *netdev;
++#	ifdef HAVE_NETDEV_PRIV
++	struct wcdte_netdev_priv *priv;
++#endif
+ 	const char our_mac[] = { 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff};
+ 
+-	if (!(netdev = alloc_netdev(0, wc->board_name, ether_setup))) {
++#	ifdef HAVE_NETDEV_PRIV
++	netdev = alloc_netdev(sizeof(struct wcdte_netdev_priv),
++			wc->board_name, ether_setup);
++	if (!netdev)
++		return -ENOMEM;
++	priv = netdev_priv(netdev);
++	priv->wc = wc;
++#	else
++	netdev = alloc_netdev(0, wc->board_name, ether_setup);
++	if (!netdev)
+ 		return -ENOMEM;
+-	}
+-
+-	memcpy(netdev->dev_addr, our_mac, sizeof(our_mac));
+ 	netdev->priv = wc;
++#	endif
++	memcpy(netdev->dev_addr, our_mac, sizeof(our_mac));
+ 	netdev->set_multicast_list = &wctc4xxp_net_set_multi;
+ 	netdev->open = &wctc4xxp_net_up;
+ 	netdev->stop = &wctc4xxp_net_down;
+@@ -885,10 +923,12 @@
+ 	}
+ 
+ 	skb_queue_tail(&wc->captured_packets, skb);
+-#	if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24)
++#	if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 24)
+ 	netif_rx_schedule(netdev);
+-#	else
++#	elif LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 29)
+ 	netif_rx_schedule(netdev, &wc->napi);
++#	else
++	netif_rx_schedule(&wc->napi);
+ #	endif
+ 	return;
+ }
+@@ -1005,6 +1045,7 @@
+ {
+ 	volatile struct wctc4xxp_descriptor *d;
+ 	unsigned int len;
++	unsigned long flags;
+ 
+ 	WARN_ON(!c);
+ 	len = (c->data_len < MIN_PACKET_LEN) ? MIN_PACKET_LEN : c->data_len;
+@@ -1013,11 +1054,11 @@
+ 		c->data_len = MAX_FRAME_SIZE;
+ 	}
+ 
+-	spin_lock_bh(&dr->lock);
++	spin_lock_irqsave(&dr->lock, flags);
+ 	d = wctc4xxp_descriptor(dr, dr->tail); 
+ 	WARN_ON(!d);
+ 	if (d->buffer1) {
+-		spin_unlock_bh(&dr->lock);
++		spin_unlock_irqrestore(&dr->lock, flags);
+ 		/* Do not overwrite a buffer that is still in progress. */
+ 		return -EBUSY;
+ 	}
+@@ -1030,7 +1071,7 @@
+ 	dr->pending[dr->tail] = c;
+ 	dr->tail = ++dr->tail & DRING_MASK;
+ 	++dr->count;
+-	spin_unlock_bh(&dr->lock);
++	spin_unlock_irqrestore(&dr->lock, flags);
+ 	return 0;
+ }
+ 
+@@ -1040,7 +1081,8 @@
+ 	volatile struct wctc4xxp_descriptor *d;
+ 	struct tcb *c;
+ 	unsigned int head = dr->head;
+-	spin_lock_bh(&dr->lock);
++	unsigned long flags;
++	spin_lock_irqsave(&dr->lock, flags);
+ 	d = wctc4xxp_descriptor(dr, head);
+ 	if (d->buffer1 && !OWNED(d)) {
+ 		pci_unmap_single(dr->pdev, d->buffer1, 
+@@ -1056,16 +1098,17 @@
+ 	} else {
+ 		c = NULL;
+ 	}
+-	spin_unlock_bh(&dr->lock);
++	spin_unlock_irqrestore(&dr->lock, flags);
+ 	return c;
+ }
+ 
+ static inline int wctc4xxp_getcount(struct wctc4xxp_descriptor_ring *dr) 
+ {
+ 	int count;
+-	spin_lock_bh(&dr->lock);
++	unsigned long flags;
++	spin_lock_irqsave(&dr->lock, flags);
+ 	count = dr->count;
+-	spin_unlock_bh(&dr->lock);
++	spin_unlock_irqrestore(&dr->lock, flags);
+ 	return count;
+ }
+ 
+@@ -1256,9 +1299,10 @@
+ {
+ 	int i; 
+ 	struct wctc4xxp_descriptor *d;
++	unsigned long flags;
+ 	
+ 	/* NOTE: The DTE must be in the stopped state. */
+-	spin_lock_bh(&dr->lock);
++	spin_lock_irqsave(&dr->lock, flags);
+ 	for (i = 0; i < DRING_SIZE; ++i) {
+ 		d = wctc4xxp_descriptor(dr, i);
+ 		if (d->buffer1) {
+@@ -1276,7 +1320,7 @@
+ 	dr->head = 0;
+ 	dr->tail = 0;
+ 	dr->count = 0;
+-	spin_unlock_bh(&dr->lock);
++	spin_unlock_irqrestore(&dr->lock, flags);
+ 	pci_free_consistent(dr->pdev, (sizeof(*d)+dr->padding) * DRING_SIZE, 
+ 	                    dr->desc, dr->desc_dma); 
+ }
+@@ -1289,9 +1333,10 @@
+ 	spin_lock_bh(&wc->cmd_list_lock);
+ 	list_splice_init(&wc->cmd_list, &local_list);
+ 	list_splice_init(&wc->waiting_for_response_list, &local_list);
++	list_splice_init(&wc->rx_list, &local_list);
+ 	spin_unlock_bh(&wc->cmd_list_lock);
+ 
+-	while(!list_empty(&local_list)) {
++	while (!list_empty(&local_list)) {
+ 		cmd = list_entry(local_list.next, struct tcb, node); 
+ 		list_del_init(&cmd->node);
+ 		free_cmd(cmd);
+@@ -1497,9 +1542,7 @@
+ 	u8 wctc4xxp_dstfmt; /* Digium Transcoder Engine Dest Format */
+ 	int res;
+ 
+-	if (down_interruptible(&wc->chansem)) {
+-		return -EINTR;
+-	}
++	down(&wc->chansem);
+ 
+ 	/* Check again to see if the channel was built after grabbing the
+ 	 * channel semaphore, in case the previous holder of the semaphore
+@@ -1578,9 +1621,7 @@
+ 		return -EIO;
+ 	}
+ 
+-	if (down_interruptible(&wc->chansem)) {
+-		return -EINTR;
+-	}
++	down(&wc->chansem);
+ 
+ 	/* Remove any packets that are waiting on the outbound queue. */
+ 	wctc4xxp_cleanup_channel_private(wc, dtc);
+@@ -1887,6 +1928,38 @@
+ 	return ((0x02 == hdr->type) || (0x04 == hdr->type)) ? 1 : 0;
+ }
+ 
++static void
++print_command(struct wcdte *wc, const struct tcb *cmd)
++{
++	int i, curlength;
++	const struct csm_encaps_hdr *hdr = cmd->data;
++	char *buffer;
++	const int BUFFER_SIZE = 1024;
++	int parameters = ((hdr->length - 8)/sizeof(__le16));
++
++	buffer = kzalloc(BUFFER_SIZE + 1, GFP_ATOMIC);
++	if (!buffer) {
++		DTE_PRINTK(DEBUG, "Failed print_command\n");
++		return;
++	}
++	curlength = snprintf(buffer, BUFFER_SIZE, 
++		"opcode: %04x seq: %02x control: %02x "
++		"channel: %04x ", be16_to_cpu(hdr->op_code),
++		hdr->seq_num, hdr->control, be16_to_cpu(hdr->channel));
++	curlength += snprintf(buffer + curlength, BUFFER_SIZE - curlength,
++		"length: %02x index: %02x type: %02x "
++		"class: %02x function: %04x",
++		hdr->length, hdr->index, hdr->type, hdr->class,
++		le16_to_cpu(hdr->function));
++	for (i = 0; i < parameters; ++i) {
++		curlength += snprintf(buffer + curlength,
++			BUFFER_SIZE - curlength, " %04x",
++			le16_to_cpu(hdr->params[i]));
++	}
++	DTE_PRINTK(DEBUG, "%s\n", buffer);
++	kfree(buffer);
++}
++
+ static void 
+ receive_csm_encaps_packet(struct wcdte *wc, struct tcb *cmd)
+ {
+@@ -1923,6 +1996,10 @@
+ 				wake_up(&wc->waitq);
+ 			}
+ 			free_cmd(cmd);
++		} else if (MONITOR_LIVE_INDICATION_TYPE == hdr->type) {
++			DTE_PRINTK(WARNING, "Received diagnostic message:\n");
++			print_command(wc, cmd);
++			free_cmd(cmd);
+ 		} else {
+ 			DTE_PRINTK(WARNING, "Unknown command type received. %02x\n", hdr->type);
+ 			free_cmd(cmd);
+@@ -2026,28 +2103,21 @@
+ static inline void service_rx_ring(struct wcdte *wc)
+ {
+ 	struct tcb *cmd;
+-	while ((cmd = wctc4xxp_retrieve(wc->rxd))) {
+-		struct tcb *newcmd;
++	unsigned long flags;
++	LIST_HEAD(local_list);
+ 
+-		wctc4xxp_net_capture_cmd(wc, cmd);
++	spin_lock_irqsave(&wc->rx_list_lock, flags);
++	list_splice_init(&wc->rx_list, &local_list);
++	spin_unlock_irqrestore(&wc->rx_list_lock, flags);
+ 
+-		if(!(newcmd = __alloc_cmd(ALLOC_FLAGS, 0))) {
+-			DTE_PRINTK(ERR, "Out of memory in %s.\n", __FUNCTION__);
+-		} else {
+-			if (newcmd->data_len < MAX_FRAME_SIZE) {
+-				newcmd->data = kmalloc(MAX_FRAME_SIZE, ALLOC_FLAGS);
+-				if (!newcmd->data) {
+-					DTE_PRINTK(ERR, "out of memory in %s " \
+-					    "again.\n", __FUNCTION__);
+-				}
+-				newcmd->data_len = MAX_FRAME_SIZE;
+-			}
+-			if (wctc4xxp_submit(wc->rxd, newcmd)) {
+-				DTE_PRINTK(ERR, "Failed submit in %s\n", __FUNCTION__);
+-				free_cmd(newcmd);
+-			}
+-			wctc4xxp_receive_demand_poll(wc);
+-		}
++	/*
++	 * Process the received packets
++	 */
++	while (!list_empty(&local_list)) {
++		cmd = container_of(local_list.next, struct tcb, node);
++		list_del_init(&cmd->node);
++
++		wctc4xxp_net_capture_cmd(wc, cmd);
+ 		wctc4xxp_receiveprep(wc, cmd);
+ 	}
+ 	wctc4xxp_receive_demand_poll(wc);
+@@ -2075,6 +2145,7 @@
+ DAHDI_IRQ_HANDLER(wctc4xxp_interrupt)
+ {
+ 	struct wcdte *wc = dev_id;
++	struct tcb *cmd;
+ 	u32 ints;
+ 	u32 reg;
+ #define TX_COMPLETE_INTERRUPT 0x00000001
+@@ -2091,10 +2162,28 @@
+ 
+ 	if (likely(ints & NORMAL_INTERRUPTS)) {
+ 		reg = 0;
+-		if (ints & TX_COMPLETE_INTERRUPT) {
++		if (ints & TX_COMPLETE_INTERRUPT)
+ 			reg |= TX_COMPLETE_INTERRUPT;
+-		}
++
+ 		if (ints & RX_COMPLETE_INTERRUPT) {
++			while ((cmd = wctc4xxp_retrieve(wc->rxd))) {
++				spin_lock(&wc->rx_list_lock);
++				list_add_tail(&cmd->node, &wc->rx_list);
++				spin_unlock(&wc->rx_list_lock);
++
++				cmd = __alloc_cmd(GFP_ATOMIC, 0);
++				if (!cmd) {
++					DTE_PRINTK(ERR,
++					  "Out of memory in %s.\n", __func__);
++				} else {
++					if (wctc4xxp_submit(wc->rxd, cmd)) {
++						DTE_PRINTK(ERR,
++						  "Failed submit in %s\n",
++						  __func__);
++						free_cmd(cmd);
++					}
++				}
++			}
+ 			reg |= RX_COMPLETE_INTERRUPT;
+ 		}
+ #if DEFERRED_PROCESSING == WORKQUEUE
+@@ -2205,8 +2294,7 @@
+ static void 
+ wctc4xxp_enable_interrupts(struct wcdte *wc)
+ {
+-	wctc4xxp_setintmask(wc, 0x000180c1);
+-	// wctc4xxp_setintmask(wc, 0xffffffff);
++	wctc4xxp_setintmask(wc, 0x000180c0);
+ }
+ 
+ static void 
+@@ -2615,26 +2703,30 @@
+ {
+ 	struct dahdi_transcoder_channel *dtc1, *dtc2;
+ 	struct channel_pvt *cpvt1, *cpvt2;
+-	int chan1, chan2;
++	int chan1, chan2, timeslot1, timeslot2;
+ 	int res;
+ 
+ 	if (cpvt->encoder) {
+ 		chan1 = cpvt->chan_in_num;
++		timeslot1 = cpvt->timeslot_in_num;
+ 		chan2 = cpvt->chan_out_num;
++		timeslot2 = cpvt->timeslot_out_num;
+ 	} else {
+ 		chan1 = cpvt->chan_out_num;
++		timeslot1 = cpvt->timeslot_out_num;
+ 		chan2 = cpvt->chan_in_num;
++		timeslot2 = cpvt->timeslot_in_num;
+ 	}
+ 
+-	if (chan1/2 >= wc->numchannels || chan2/2 >= wc->numchannels) {
++	if (timeslot1/2 >= wc->numchannels || timeslot2/2 >= wc->numchannels) {
+ 		DTE_PRINTK(WARNING, 
+-		 "Invalid channel numbers in %s. chan1:%d chan2: %d\n", 
+-		 __FUNCTION__, chan1/2, chan2/2);
++		 "Invalid channel numbers in %s. chan1:%d chan2: %d\n",
++		 __func__, timeslot1/2, timeslot2/2);
+ 		return 0;
+ 	}
+ 
+-	dtc1 = &(wc->uencode->channels[chan1/2]);
+-	dtc2 = &(wc->udecode->channels[chan2/2]);
++	dtc1 = &(wc->uencode->channels[timeslot1/2]);
++	dtc2 = &(wc->udecode->channels[timeslot2/2]);
+ 	cpvt1 = dtc1->pvt;
+ 	cpvt2 = dtc2->pvt;
+ 
+@@ -2740,10 +2832,8 @@
+ wctc4xxp_setup_channels(struct wcdte *wc)
+ {
+ 	int ret;
+-	if ((ret=down_interruptible(&wc->chansem))) {
+-		WARN_ALWAYS();
+-		return ret;
+-	}
++
++	down(&wc->chansem);
+ 	ret = __wctc4xxp_setup_channels(wc);
+ 	up(&wc->chansem);
+ 
+@@ -2979,8 +3069,10 @@
+ 	init_MUTEX(&wc->chansem);
+ 	spin_lock_init(&wc->reglock);
+ 	spin_lock_init(&wc->cmd_list_lock);
++	spin_lock_init(&wc->rx_list_lock);
+ 	INIT_LIST_HEAD(&wc->cmd_list);
+ 	INIT_LIST_HEAD(&wc->waiting_for_response_list);
++	INIT_LIST_HEAD(&wc->rx_list);
+ #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
+ 	INIT_WORK(&wc->deferred_work, deferred_work_func, wc);
+ #else

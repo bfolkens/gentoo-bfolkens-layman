@@ -1,0 +1,320 @@
+diff --git dahdi-linux-2.1.0.4.ORIG/drivers/dahdi/dahdi_dummy.c dahdi-linux-2.1.0.4/drivers/dahdi/dahdi_dummy.c
+index f084061..97949e3 100644
+--- dahdi-linux-2.1.0.4.ORIG/drivers/dahdi/dahdi_dummy.c
++++ dahdi-linux-2.1.0.4/drivers/dahdi/dahdi_dummy.c
+@@ -1,17 +1,16 @@
+ /*
+  * Dummy DAHDI Driver for DAHDI Telephony interface
+  *
+- * Required: usb-uhci module and kernel > 2.4.4 OR kernel > 2.6.0
++ * Required: kernel > 2.6.0
+  *
+  * Written by Robert Pleh <robert.pleh@hermes.si>
+  * 2.6 version by Tony Hoyle
+  * Unified by Mark Spencer <markster@digium.com>
+- * Converted to use RTC on i386 by Tony Mountifield <tony@softins.co.uk>
+  *
+  * Converted to use HighResTimers on i386 by Jeffery Palmer <jeff@triggerinc.com>
+  *
+  * Copyright (C) 2002, Hermes Softlab
+- * Copyright (C) 2004, Digium, Inc.
++ * Copyright (C) 2004-2009, Digium, Inc.
+  *
+  * All rights reserved.
+  *
+@@ -39,33 +38,9 @@
+ 
+ #include <linux/version.h>
+ 
+-#ifndef VERSION_CODE
+-#  define VERSION_CODE(vers,rel,seq) ( ((vers)<<16) | ((rel)<<8) | (seq) )
+-#endif
+-
+-
+-#if LINUX_VERSION_CODE < VERSION_CODE(2,4,5)
+-#  error "This kernel is too old: not supported by this file"
+-#endif
+-
+-/*
+- * NOTE: (only applies to kernel 2.6)
+- * If using an i386 architecture without a PC real-time clock,
+- * the #define USE_RTC should be commented out.
+- */
+-#if defined(__i386__) || defined(__x86_64__)
+-#if LINUX_VERSION_CODE >= VERSION_CODE(2,6,15)
+-/* The symbol hrtimer_forward is only exported as of 2.6.22: */
+-#if defined(CONFIG_HIGH_RES_TIMERS) && LINUX_VERSION_CODE >= VERSION_CODE(2,6,22)
++#if defined(CONFIG_HIGH_RES_TIMERS) && \
++	LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 22)
+ #define USE_HIGHRESTIMER
+-#else
+-#define USE_RTC
+-#endif
+-#else
+-#if 0
+-#define USE_RTC
+-#endif
+-#endif
+ #endif
+ 
+ #include <linux/kernel.h>
+@@ -75,19 +50,13 @@
+ #include <linux/errno.h>
+ #include <linux/moduleparam.h>
+ 
+-#include <dahdi/kernel.h>
+-
+-#ifdef USE_HIGHRESTIMER
++#if defined(USE_HIGHRESTIMER)
+ #include <linux/hrtimer.h>
+-#endif
+-#ifdef USE_RTC
+-#include <linux/rtc.h>
++#else
++#include <linux/time.h>
+ #endif
+ 
+-#include <linux/version.h>
+-#if LINUX_VERSION_CODE > KERNEL_VERSION(2,4,19)
+-#define USB2420
+-#endif
++#include <dahdi/kernel.h>
+ 
+ #ifndef HAVE_HRTIMER_ACCESSORS
+ #if defined(USE_HIGHRESTIMER) && \
+@@ -109,10 +78,9 @@ struct dahdi_dummy {
+ 	struct dahdi_span span;
+ 	struct dahdi_chan _chan;
+ 	struct dahdi_chan *chan;
+-	unsigned int counter;
+-#ifdef USE_RTC
+-	spinlock_t rtclock;
+-	rtc_task_t rtc_task;
++#if !defined(USE_HIGHRESTIMER)
++	unsigned long calls_since_start;
++	struct timespec start_interval;
+ #endif
+ };
+ 
+@@ -123,71 +91,21 @@ static int debug = 0;
+ #ifdef USE_HIGHRESTIMER
+ #define CLOCK_SRC "HRtimer"
+ static struct hrtimer zaptimer;
+-#elif defined(USE_RTC)
+-#define CLOCK_SRC "RTC"
+-static int rtc_rate = 0;
+-static int current_rate = 0;
+-static int taskletpending = 0;
+-static struct tasklet_struct ztd_tlet;
+-static void ztd_tasklet(unsigned long data);
+-#else /* Linux 2.6, but no RTC or HRTIMER used */
+-#define CLOCK_SRC "Linux26"
+-/* 2.6 kernel timer stuff */
+-static struct timer_list timer;
+-#endif
+-
+ #define DAHDI_RATE 1000                     /* DAHDI ticks per second */
+ #define DAHDI_TIME (1000000 / DAHDI_RATE)  /* DAHDI tick time in us */
+ #define DAHDI_TIME_NS (DAHDI_TIME * 1000)  /* DAHDI tick time in ns */
++#else
++#define CLOCK_SRC "Linux26"
++static struct timer_list timer;
++static atomic_t shutdown;
++#define JIFFIES_INTERVAL (HZ/250) 	/* 4ms is fine for dahdi_dummy */
++#endif
+ 
+ /* Different bits of the debug variable: */
+ #define DEBUG_GENERAL (1 << 0)
+ #define DEBUG_TICKS   (1 << 1)
+ 
+-
+-#ifdef USE_RTC
+-static void update_rtc_rate(struct dahdi_dummy *ztd)
+-{
+-	if (((rtc_rate & (rtc_rate - 1)) != 0) || (rtc_rate > 8192) || (rtc_rate < 2)) {
+-		printk(KERN_NOTICE "Invalid RTC rate %d specified\n", rtc_rate);
+-		rtc_rate = current_rate;	/* Set default RTC rate */
+-	}
+-	if (!rtc_rate || (rtc_rate != current_rate)) {
+-		rtc_control(&ztd->rtc_task, RTC_IRQP_SET, current_rate = (rtc_rate ? rtc_rate : 1024));	/* 1024 Hz */
+-		printk(KERN_INFO "dahdi_dummy: RTC rate is %d\n", rtc_rate);
+-		ztd->counter = 0;
+-	}
+-}
+-
+-static void ztd_tasklet(unsigned long data)
+-{
+-	if (taskletpending)
+-		update_rtc_rate((struct dahdi_dummy *)ztd);
+-	taskletpending = 0;
+-}
+-
+-/* rtc_interrupt - called at 1024Hz from hook in RTC handler */
+-static void dahdi_dummy_rtc_interrupt(void *private_data)
+-{
+-	struct dahdi_dummy *ztd = private_data;
+-	unsigned long flags;
+-
+-	/* Is spinlock required here??? */
+-	spin_lock_irqsave(&ztd->rtclock, flags);
+-	ztd->counter += DAHDI_TIME;
+-	while (ztd->counter >= current_rate) {
+-		ztd->counter -= current_rate;
+-		/* Update of RTC IRQ rate isn't possible from interrupt handler :( */
+-		if (!taskletpending && (current_rate != rtc_rate)) {
+-			taskletpending = 1;
+-			tasklet_hi_schedule(&ztd_tlet);
+-		}
+-		dahdi_receive(&ztd->span);
+-		dahdi_transmit(&ztd->span);
+-	}
+-	spin_unlock_irqrestore(&ztd->rtclock, flags);
+-}
+-#elif defined(USE_HIGHRESTIMER)
++#if defined(USE_HIGHRESTIMER)
+ static enum hrtimer_restart dahdi_dummy_hr_int(struct hrtimer *htmr)
+ {
+ 	unsigned long overrun;
+@@ -220,17 +138,45 @@ static enum hrtimer_restart dahdi_dummy_hr_int(struct hrtimer *htmr)
+ 	return HRTIMER_RESTART;
+ }
+ #else
+-/* use kernel system tick timer if PC architecture RTC is not available */
++static unsigned long timespec_diff_ms(struct timespec *t0, struct timespec *t1)
++{
++	long nanosec, sec;
++	unsigned long ms;
++	sec = (t1->tv_sec - t0->tv_sec);
++	nanosec = (t1->tv_nsec - t0->tv_nsec);
++	while (nanosec >= NSEC_PER_SEC) {
++		nanosec -= NSEC_PER_SEC;
++		++sec;
++	}
++	while (nanosec < 0) {
++		nanosec += NSEC_PER_SEC;
++		--sec;
++	}
++	ms = (sec * 1000) + (nanosec / 1000000L);
++	return ms;
++}
++
+ static void dahdi_dummy_timer(unsigned long param)
+ {
+-	mod_timer(&timer, jiffies + 1);
++	unsigned long ms_since_start;
++	struct timespec now;
++	const unsigned long MAX_INTERVAL = 100000L;
+ 
+-	ztd->counter += DAHDI_TIME;
+-	while (ztd->counter >= HZ) {
+-		ztd->counter -= HZ;
++	if (!atomic_read(&shutdown))
++		mod_timer(&timer, jiffies + JIFFIES_INTERVAL);
++
++	now = current_kernel_time();
++	ms_since_start = timespec_diff_ms(&ztd->start_interval, &now);
++	while (ms_since_start > ztd->calls_since_start) {
++		ztd->calls_since_start++;
+ 		dahdi_receive(&ztd->span);
+ 		dahdi_transmit(&ztd->span);
+ 	}
++
++	if (ms_since_start > MAX_INTERVAL) {
++		ztd->calls_since_start = 0;
++		ztd->start_interval = now;
++	}
+ }
+ #endif
+ 
+@@ -257,43 +203,19 @@ static int dahdi_dummy_initialize(struct dahdi_dummy *ztd)
+ 
+ int init_module(void)
+ {
+-#ifdef USE_RTC
+-	int err;
+-#endif
+-
+-	ztd = kmalloc(sizeof(struct dahdi_dummy), GFP_KERNEL);
++	ztd = kzalloc(sizeof(*ztd), GFP_KERNEL);
+ 	if (ztd == NULL) {
+ 		printk(KERN_ERR "dahdi_dummy: Unable to allocate memory\n");
+ 		return -ENOMEM;
+ 	}
+ 
+-	memset(ztd, 0x0, sizeof(struct dahdi_dummy));
+-
+ 	if (dahdi_dummy_initialize(ztd)) {
+ 		printk(KERN_ERR "dahdi_dummy: Unable to intialize DAHDI driver\n");
+ 		kfree(ztd);
+ 		return -ENODEV;
+ 	}
+ 
+-	ztd->counter = 0;
+-#ifdef USE_RTC
+-	ztd->rtclock = SPIN_LOCK_UNLOCKED;
+-	ztd->rtc_task.func = dahdi_dummy_rtc_interrupt;
+-	ztd->rtc_task.private_data = ztd;
+-	err = rtc_register(&ztd->rtc_task);
+-	if (err < 0) {
+-		printk(KERN_ERR "dahdi_dummy: Unable to register DAHDI rtc driver\n");
+-		dahdi_unregister(&ztd->span);
+-		kfree(ztd);
+-		return err;
+-	}
+-	/* Set default RTC interrupt rate to 1024Hz */
+-	if (!rtc_rate)
+-		rtc_rate = 1024;
+-	update_rtc_rate(ztd);
+-	rtc_control(&ztd->rtc_task, RTC_PIE_ON, 0);
+-	tasklet_init(&ztd_tlet, ztd_tasklet, 0);
+-#elif defined(USE_HIGHRESTIMER)
++#if defined(USE_HIGHRESTIMER)
+ 	printk(KERN_DEBUG "dahdi_dummy: Trying to load High Resolution Timer\n");
+ 	hrtimer_init(&zaptimer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+ 	printk(KERN_DEBUG "dahdi_dummy: Initialized High Resolution Timer\n");
+@@ -307,7 +229,9 @@ int init_module(void)
+ #else
+ 	init_timer(&timer);
+ 	timer.function = dahdi_dummy_timer;
+-	timer.expires = jiffies + 1;
++	ztd->start_interval = current_kernel_time();
++	timer.expires = jiffies + JIFFIES_INTERVAL;
++	atomic_set(&shutdown, 0);
+ 	add_timer(&timer);
+ #endif
+ 
+@@ -319,18 +243,12 @@ int init_module(void)
+ 
+ void cleanup_module(void)
+ {
+-#ifdef USE_RTC
+-	if (taskletpending) {
+-		tasklet_disable(&ztd_tlet);
+-		tasklet_kill(&ztd_tlet);
+-	}
+-	rtc_control(&ztd->rtc_task, RTC_PIE_OFF, 0);
+-	rtc_unregister(&ztd->rtc_task);
+-#elif defined(USE_HIGHRESTIMER)
++#if defined(USE_HIGHRESTIMER)
+ 	/* Stop high resolution timer */
+ 	hrtimer_cancel(&zaptimer);
+ #else
+-	del_timer(&timer);
++	atomic_set(&shutdown, 1);
++	del_timer_sync(&timer);
+ #endif
+ 	dahdi_unregister(&ztd->span);
+ 	kfree(ztd);
+@@ -338,12 +256,7 @@ void cleanup_module(void)
+ 		printk(KERN_DEBUG "dahdi_dummy: cleanup() finished\n");
+ }
+ 
+-
+-
+ module_param(debug, int, 0600);
+-#ifdef USE_RTC
+-module_param(rtc_rate, int, 0600);
+-#endif
+ 
+ MODULE_DESCRIPTION("Timing-Only Driver");
+ MODULE_AUTHOR("Robert Pleh <robert.pleh@hermes.si>");

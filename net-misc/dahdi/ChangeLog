@@ -1,0 +1,15 @@
+# ChangeLog for net-misc/dahdi
+# Copyright 1999-2009 Gentoo Foundation; Distributed under the GPL v2
+# $Header: /var/cvsroot/gentoo-x86/net-misc/dahdi/ChangeLog,v 1.1 2009/03/10 16:32:11 chainsaw Exp $
+
+*dahdi-2.1.0.4 (10 Mar 2009)
+
+  10 Mar 2009; <chainsaw@gentoo.org>
+  +files/dahdi-2.1.0.4-netdev-2-6-29.patch,
+  +files/dahdi-2.1.0.4-no-depmod.patch, +metadata.xml,
+  +dahdi-2.1.0.4.ebuild:
+  Initial commit, ebuild by Svoop & Rambaldi. Taken from the VoiP overlay
+  but HPEC functionality removed as the decision logic is not portable to
+  X86 architectures and looks fragile. Took 2.6.29 build fixes from upstream
+  Digium bug #14285.
+

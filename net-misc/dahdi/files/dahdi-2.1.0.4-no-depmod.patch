@@ -1,0 +1,12 @@
+diff -uNr dahdi-linux-2.1.0.4.ORIG/Makefile dahdi-linux-2.1.0.4/Makefile
+--- dahdi-linux-2.1.0.4.ORIG/Makefile	2009-03-10 15:53:36.000000000 +0000
++++ dahdi-linux-2.1.0.4/Makefile	2009-03-10 15:53:59.000000000 +0000
+@@ -191,7 +191,7 @@
+ 	build_tools/uninstall-modules dahdi $(KVERS)
+ endif
+ 	$(KMAKE) INSTALL_MOD_PATH=$(DESTDIR) INSTALL_MOD_DIR=dahdi modules_install
+-	[ `id -u` = 0 ] && /sbin/depmod -a $(KVERS) || :
++#	[ `id -u` = 0 ] && /sbin/depmod -a $(KVERS) || :
+ 
+ uninstall-modules:
+ ifdef DESTDIR
