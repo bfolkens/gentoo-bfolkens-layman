@@ -1,0 +1,1 @@
+To install with +passenger, remember to use FEATURES=-sandbox on the command line before emerge.
