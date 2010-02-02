@@ -18,8 +18,7 @@ DEPEND="dev-lang/perl
 	dev-libs/openssl
 	pcre? ( >=dev-libs/libpcre-4.2 )
 	zlib? ( sys-libs/zlib )
-	perl? ( >=dev-lang/perl-5.8 )
-	passenger? ( www-misc/passenger )"
+	perl? ( >=dev-lang/perl-5.8 )"
 
 
 pkg_setup() {

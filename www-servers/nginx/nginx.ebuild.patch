@@ -9,14 +9,6 @@
 
  DEPEND="dev-lang/perl
         pcre? ( >=dev-libs/libpcre-4.2 )
-        ssl? ( dev-libs/openssl )
-        zlib? ( sys-libs/zlib )
--       perl? ( >=dev-lang/perl-5.8 )"
-+       perl? ( >=dev-lang/perl-5.8 )
-+       passenger? ( www-misc/passenger )"
-
- pkg_setup() {
-        ebegin "Creating nginx user and group"
 @@ -60,6 +61,8 @@
         use webdav      && myconf="${myconf} --with-http_dav_module"
         use sub         && myconf="${myconf} --with-http_sub_module"
