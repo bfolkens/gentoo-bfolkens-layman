@@ -14,7 +14,7 @@ SRC_URI="http://c2512712.cdn.cloudfiles.rackspacecloud.com/${MY_P}_src.tar.gz"
 
 LICENSE="Apache-2.0"
 SLOT="0"
-KEYWORDS="~ia64 ~x86"
+KEYWORDS="~x86 ~amd64"
 IUSE=""
 
 RDEPEND=">=dev-libs/libevent-2.0.7
