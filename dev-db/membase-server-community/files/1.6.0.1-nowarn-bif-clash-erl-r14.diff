@@ -1,0 +1,11 @@
+--- ns_server/Emakefile.orig	2010-10-29 02:29:30.000000000 +0000
++++ ns_server/Emakefile	2010-10-29 02:24:02.000000000 +0000
+@@ -2,7 +2,7 @@
+            {outdir, "ebin"},
+            {i, "include"},
+            %% warnings_as_errors,
+-           nowarn_bif_clash,
++           no_auto_import,
+            warn_export_all,
+            warn_unused_import
+           ]}.
