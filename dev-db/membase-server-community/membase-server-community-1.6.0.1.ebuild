@@ -128,12 +128,23 @@ src_install() {
 	keepdir "etc/membase/${PV}"
 	cp "${FILESDIR}/${PV}/config" "${D}/etc/membase/${PV}" || \
 		die "Install failed!"
-	dosym "etc/membase/${PV}/priv" "/etc/membase/${PV}"
+
+	dosym "." "/etc/membase/${PV}/priv"
+
 	chown -R membase:daemon "${D}/etc/membase" || \
 		die "Install failed!"
 
 	dodir "var/lib/membase/${PV}/mnesia" "var/lib/membase/${PV}/data"
+
 	keepdir "var/lib/membase/${PV}/mnesia" "var/lib/membase/${PV}/data"
+
+	dodir "var/lib/membase/${PV}/log" 
+	dodir "var/lib/membase/${PV}/tmp"
+	keepdir "var/lib/membase/${PV}/log"
+	keepdir "var/lib/membase/${PV}/tmp"
+	dosym "../../../../var/lib/membase/${PV}/tmp" "opt/membase/${PV}/ns_server/tmp"
+	dosym "../../../../var/lib/membase/${PV}/data" "opt/membase/${PV}/ns_server/data"
+
 	chown -R membase:daemon "${D}/var/lib/membase" || \
 		die "Install failed!"
 
