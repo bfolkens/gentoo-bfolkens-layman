@@ -19,7 +19,8 @@ IUSE=""
 
 RDEPEND=">=dev-libs/libevent-2.0.7
 		 >=net-misc/curl-7.21.1
-		 >=dev-lang/erlang-14"
+		 >=dev-lang/erlang-14
+		 >=dev-ruby/sprockets-1.0.2"
 		 # Erlang 13.2.4 causes some strange issues with EAFNOSUPPORT errors
 DEPEND="${RDEPEND}
 		>=sys-devel/gcc-4.3.0
