@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE pkgmetadata SYSTEM "http://www.gentoo.org/dtd/metadata.dtd">
+<pkgmetadata>
+<herd>no-herd</herd>
+<maintainer>
+  <email>bfolkens@gmail.com</email>
+</maintainer>
+<longdescription>
+Sprockets is a Ruby library that preprocesses and concatenates JavaScript source files. It takes any number of source files and preprocesses them line-by-line in order to build a single concatenation. Specially formatted lines act as directives to the Sprockets preprocessor, telling it to require the contents of another file or library first or to provide a set of asset files (such as images or stylesheets) to the document root. Sprockets attempts to fulfill required dependencies by searching a set of directories called the load path.
+</longdescription>
+</pkgmetadata>
