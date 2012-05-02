@@ -1,0 +1,68 @@
+# ChangeLog for net-misc/mosh
+# Copyright 1999-2012 Gentoo Foundation; Distributed under the GPL v2
+# $Header: /var/cvsroot/gentoo-x86/net-misc/mosh/ChangeLog,v 1.14 2012/04/30 22:19:41 xmw Exp $
+
+  30 Apr 2012; Michael Weber <xmw@gentoo.org> -mosh-1.1.95.ebuild:
+  Remove old version
+
+*mosh-1.2 (26 Apr 2012)
+
+  26 Apr 2012; Michael Weber <xmw@gentoo.org> -mosh-1.1.97.ebuild,
+  -mosh-1.1.99b.ebuild, +mosh-1.2.ebuild:
+  Version bump, remove old versions.
+
+*mosh-1.1.99b (25 Apr 2012)
+
+  25 Apr 2012; Michael Weber <xmw@gentoo.org> +mosh-1.1.99b.ebuild:
+  Version bump
+
+*mosh-1.1.97 (24 Apr 2012)
+
+  24 Apr 2012; Michael Weber <xmw@gentoo.org> -mosh-1.1.94d.ebuild,
+  +mosh-1.1.97.ebuild:
+  Version bump
+
+*mosh-1.1.95 (23 Apr 2012)
+
+  23 Apr 2012; Michael Weber <xmw@gentoo.org> -mosh-1.1.94.ebuild,
+  +mosh-1.1.95.ebuild:
+  Version bump
+
+*mosh-1.1.94d (21 Apr 2012)
+
+  21 Apr 2012; Michael Weber <xmw@gentoo.org> -mosh-1.1.3.ebuild,
+  +mosh-1.1.94d.ebuild:
+  Version bump.
+
+  19 Apr 2012; Michael Weber <xmw@gentoo.org> mosh-1.1.94.ebuild,
+  mosh-9999.ebuild:
+  Rev-add dev-libs/skalibs dep (thanks Martin Väth, bug 412561)
+
+  18 Apr 2012; Michael Weber <xmw@gentoo.org> mosh-1.1.94.ebuild,
+  mosh-9999.ebuild:
+  reflect removed skalibs dependency
+
+  18 Apr 2012; Michael Weber <xmw@gentoo.org> mosh-1.1.94.ebuild:
+  reflect removed skalibs dependency
+
+  17 Apr 2012; Michael Sterrett <mr_bones_@gentoo.org> mosh-1.1.94.ebuild:
+  Fix SRC_URI some more
+
+  17 Apr 2012; Michael Weber <xmw@gentoo.org> mosh-1.1.94.ebuild:
+  Fix SRC_URI
+
+*mosh-1.1.94 (17 Apr 2012)
+
+  17 Apr 2012; Michael Weber <xmw@gentoo.org> +mosh-1.1.94.ebuild:
+  Version bump to 1.2 prerelease
+
+  16 Apr 2012; Michael Weber <xmw@gentoo.org> mosh-9999.ebuild:
+  Dropped boost dependency
+
+*mosh-9999 (06 Apr 2012)
+*mosh-1.1.3 (06 Apr 2012)
+
+  06 Apr 2012; Michael Weber <xmw@gentoo.org> +mosh-1.1.3.ebuild,
+  +mosh-9999.ebuild, +metadata.xml:
+  Initial import.
+

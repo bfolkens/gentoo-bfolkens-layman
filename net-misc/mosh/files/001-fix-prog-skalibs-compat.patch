@@ -1,0 +1,60 @@
+diff -Naur mosh-1.2-orig/src/examples/benchmark.cc mosh-1.2/src/examples/benchmark.cc
+--- mosh-1.2-orig/src/examples/benchmark.cc	2012-04-16 11:01:24.000000000 +0000
++++ mosh-1.2/src/examples/benchmark.cc	2012-05-02 00:02:27.000000000 +0000
+@@ -46,6 +46,11 @@
+ #include "locale_utils.h"
+ #include "fatal_assert.h"
+ 
++/* For newer skalibs */
++extern "C" {
++  const char *PROG = "benchmark";
++}
++
+ const int ITERATIONS = 100000;
+ 
+ using namespace Terminal;
+diff -Naur mosh-1.2-orig/src/examples/termemu.cc mosh-1.2/src/examples/termemu.cc
+--- mosh-1.2-orig/src/examples/termemu.cc	2012-04-16 11:01:24.000000000 +0000
++++ mosh-1.2/src/examples/termemu.cc	2012-05-02 00:02:44.000000000 +0000
+@@ -52,6 +52,11 @@
+ #include "locale_utils.h"
+ #include "sigfd.h"
+ 
++/* For newer skalibs */
++extern "C" {
++  const char *PROG = "benchmark";
++}
++
+ const size_t buf_size = 16384;
+ 
+ void emulate_terminal( int fd );
+diff -Naur mosh-1.2-orig/src/frontend/mosh-client.cc mosh-1.2/src/frontend/mosh-client.cc
+--- mosh-1.2-orig/src/frontend/mosh-client.cc	2012-03-27 01:18:55.000000000 +0000
++++ mosh-1.2/src/frontend/mosh-client.cc	2012-05-02 00:03:10.000000000 +0000
+@@ -30,6 +30,11 @@
+ #include <curses.h>
+ #include <term.h>
+ 
++/* For newer skalibs */
++extern "C" {
++  const char *PROG = "benchmark";
++}
++
+ void usage( const char *argv0 ) {
+   fprintf( stderr, "mosh-client (%s)\n", PACKAGE_STRING );
+   fprintf( stderr, "Copyright 2012 Keith Winstein <mosh-devel@mit.edu>\n" );
+diff -Naur mosh-1.2-orig/src/frontend/mosh-server.cc mosh-1.2/src/frontend/mosh-server.cc
+--- mosh-1.2-orig/src/frontend/mosh-server.cc	2012-04-21 00:37:20.000000000 +0000
++++ mosh-1.2/src/frontend/mosh-server.cc	2012-05-02 00:03:27.000000000 +0000
+@@ -68,6 +68,11 @@
+ 
+ #include "networktransport.cc"
+ 
++/* For newer skalibs */
++extern "C" {
++  const char *PROG = "benchmark";
++}
++
+ typedef Network::Transport< Terminal::Complete, Network::UserStream > ServerConnection;
+ 
+ void serve( int host_fd,
