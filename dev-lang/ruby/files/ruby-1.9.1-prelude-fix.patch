@@ -1,0 +1,12 @@
+diff -u ruby-1.9.1-p243.orig/common.mk ruby-1.9.1-p243/common.mk
+--- ruby-1.9.1-p243.orig/common.mk	2010-02-06 14:51:13.000000000 +0200
++++ ruby-1.9.1-p243/common.mk	2010-02-06 15:31:07.000000000 +0200
+@@ -92,7 +92,7 @@
+ 
+ GOLFOBJS      = goruby.$(OBJEXT) golf_prelude.$(OBJEXT)
+ 
+-PRELUDE_SCRIPTS = $(srcdir)/prelude.rb $(srcdir)/enc/prelude.rb $(srcdir)/gem_prelude.rb
++PRELUDE_SCRIPTS = $(srcdir)/prelude.rb $(srcdir)/enc/prelude.rb
+ PRELUDES      = prelude.c miniprelude.c
+ GOLFPRELUDES = golf_prelude.c
+ 
